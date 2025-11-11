@@ -11,6 +11,7 @@ import psycopg2
 from psycopg2.extras import execute_batch
 import os
 import random
+import json
 from datetime import datetime, timedelta
 
 fake = Faker()
@@ -61,6 +62,7 @@ DB_CONFIG = {
 NUM_USERS = int(os.getenv('NUM_USERS', '100000'))  # 100,000 usuarios
 NUM_CHATS = int(os.getenv('NUM_CHATS', '50000'))   # 50,000 chats (mezcla de privados y grupales)
 NUM_MESSAGES = int(os.getenv('NUM_MESSAGES', '500000'))  # 500,000 mensajes
+NUM_MARKETPLACE_ITEMS = int(os.getenv('NUM_MARKETPLACE_ITEMS', '10000'))  # 10,000 items en marketplace
 
 MESSAGE_TEMPLATES = [
     "Hola! ¿Cómo estás?",
@@ -299,6 +301,88 @@ def generate_messages(conn, num_messages):
     print(f"✅ {num_messages:,} mensajes creados exitosamente")
 
 
+def generate_marketplace_items(conn, num_items):
+    """Generar items de marketplace"""
+    print(f"\n🛒 Generando {num_items:,} items de marketplace...")
+    
+    cursor = conn.cursor()
+    
+    # Obtener mensajes que pueden convertirse en listings (solo de chats grupales)
+    cursor.execute("""
+        SELECT m.id, m.sender_id, m.chat_id, m.content, m.sent_at 
+        FROM messages m
+        JOIN chats c ON c.id = m.chat_id
+        WHERE m.is_deleted = false 
+        AND m.message_type = 'text'
+        AND c.chat_type = 'group'
+        ORDER BY RANDOM()
+        LIMIT %s
+    """, (num_items * 2,))  # Obtener más mensajes de los necesarios
+    
+    candidate_messages = cursor.fetchall()
+    print(f"   Mensajes candidatos encontrados: {len(candidate_messages):,}")
+    
+    if len(candidate_messages) < num_items:
+        print(f"   ⚠️  Solo hay {len(candidate_messages):,} mensajes disponibles para marketplace")
+        num_items = len(candidate_messages)
+    
+    marketplace_items = []
+    messages_to_convert = random.sample(candidate_messages, min(num_items, len(candidate_messages)))
+    
+    # Product name templates
+    product_names = [
+        "Laptop", "Phone", "Tablet", "Camera", "Headphones", "Speaker",
+        "Watch", "Bike", "Book", "Furniture", "Clothing", "Shoes",
+        "Gaming Console", "Monitor", "Keyboard", "Mouse", "Desk",
+        "Chair", "Lamp", "Art", "Collectible", "Tool", "Sport Equipment"
+    ]
+    
+    for i, (msg_id, sender_id, chat_id, content, sent_at) in enumerate(messages_to_convert):
+        # Generate product details
+        product_type = random.choice(product_names)
+        title = f"{product_type} - {fake.catch_phrase()[:50]}"
+        description = content[:500] if len(content) > 20 else fake.text(max_nb_chars=200)
+        
+        # Price between $10 and $5000
+        price = round(random.uniform(10.0, 5000.0), 2)
+        currency = random.choice(['USD', 'USD', 'USD', 'EUR', 'GBP'])  # Mostly USD
+        
+        # Random number of images (0-5)
+        num_images = random.randint(0, 5)
+        image_urls = [
+            f"https://picsum.photos/400/300?random={random.randint(1, 10000)}"
+            for _ in range(num_images)
+        ]
+        
+        status = random.choice(['active'] * 7 + ['sold'] * 2 + ['cancelled'] * 1)
+        is_negotiable = random.random() > 0.3  # 70% negotiable
+        
+        marketplace_items.append((
+            msg_id, sender_id, chat_id, title, description, price, currency,
+            json.dumps(image_urls) if image_urls else None,
+            status, is_negotiable, sent_at
+        ))
+        
+        if (i + 1) % 1000 == 0:
+            print(f"   Progreso: {i + 1:,}/{num_items:,} items generados")
+    
+    print("   Insertando items de marketplace...")
+    execute_batch(cursor, """
+        INSERT INTO marketplace_items 
+        (message_id, seller_id, chat_id, title, description, price, currency, 
+         image_urls, status, is_negotiable, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, marketplace_items, page_size=1000)
+    
+    conn.commit()
+    cursor.close()
+    print(f"✅ {len(marketplace_items):,} items de marketplace creados exitosamente")
+    return len(marketplace_items)
+
+
+## Se removieron generación de compras y calificaciones; pagos fuera de la app
+
+
 def show_stats(conn):
     """Mostrar estadísticas de la base de datos"""
     print("\n" + "="*60)
@@ -325,6 +409,19 @@ def show_stats(conn):
     cursor.execute("SELECT COUNT(*) FROM messages")
     total_messages = cursor.fetchone()[0]
     
+    cursor.execute("SELECT COUNT(*) FROM marketplace_items")
+    total_items = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM marketplace_items WHERE status = 'active'")
+    active_items = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM marketplace_items WHERE status = 'sold'")
+    sold_items = cursor.fetchone()[0]
+    
+    completed_purchases = 0
+    total_ratings = 0
+    avg_rating_str = "N/A"
+    
     print(f"👥 Usuarios totales:        {total_users:,}")
     print(f"   └─ Activos:              {active_users:,}")
     print(f"\n💬 Chats totales:           {private_chats + group_chats:,}")
@@ -332,6 +429,12 @@ def show_stats(conn):
     print(f"   └─ Grupales:             {group_chats:,}")
     print(f"\n💌 Mensajes totales:        {total_messages:,}")
     print(f"   └─ Activos (no borrados): {active_messages:,}")
+    print(f"\n🛒 Marketplace items:       {total_items:,}")
+    print(f"   ├─ Activos:              {active_items:,}")
+    print(f"   └─ Vendidos:             {sold_items:,}")
+    print(f"\n💳 Compras completadas:     {completed_purchases:,} (no aplica)")
+    print(f"\n⭐ Calificaciones:           {total_ratings:,} (no aplica)")
+    print(f"   └─ Promedio:             {avg_rating_str} estrellas")
     print("="*60)
     
     cursor.close()
@@ -351,6 +454,9 @@ def main():
         generate_users(conn, NUM_USERS)
         generate_chats(conn, NUM_CHATS)
         generate_messages(conn, NUM_MESSAGES)
+        
+        # Generar marketplace data
+        num_items = generate_marketplace_items(conn, NUM_MARKETPLACE_ITEMS)
         
         # Mostrar estadísticas
         show_stats(conn)

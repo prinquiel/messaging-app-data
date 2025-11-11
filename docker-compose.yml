@@ -43,7 +43,111 @@ services:
     ports:
       - "8000:8000"
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+
+  temporal-postgres:
+    image: postgres:13
+    container_name: temporal-postgres
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    ports:
+      - "5435:5432"
+    volumes:
+      - temporal_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal -d temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  temporal:
+    image: temporalio/auto-setup:1.23.0
+    container_name: temporal
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=temporal-postgres
+    ports:
+      - "7233:7233"
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    container_name: temporal-ui
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_UI_PORT=8233
+      - TEMPORAL_UI_ENABLE_UI=true
+      - TEMPORAL_UI_DEFAULT_NAMESPACE=default
+    ports:
+      - "8233:8233"
+    depends_on:
+      temporal:
+        condition: service_started
+
+  etl-worker:
+    build:
+      context: .
+      dockerfile: workers/etl/Dockerfile
+    container_name: etl-worker
+    environment:
+      - API_URL=http://api:8000
+      - ANALYTICS_DB_HOST=analyticsdb
+      - ANALYTICS_DB_PORT=5432
+      - ANALYTICS_DB_USER=${ANALYTICS_DB_USER}
+      - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_PASSWORD}
+      - ANALYTICS_DB_NAME=${ANALYTICS_DB_NAME}
+      - TEMPORAL_ADDRESS=temporal:7233
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      temporal:
+        condition: service_started
+      api:
+        condition: service_started
+
+  spark-master:
+    image: apache/spark:3.5.1
+    container_name: spark-master
+    hostname: spark-master
+    command: ["bash", "-lc", "/opt/spark/sbin/start-master.sh && tail -f /opt/spark/logs/*"]
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    volumes:
+      - .:/opt/work:ro
+    depends_on:
+      analyticsdb:
+        condition: service_healthy
+
+  spark-worker:
+    image: apache/spark:3.5.1
+    container_name: spark-worker
+    hostname: spark-worker
+    command: ["bash", "-lc", "/opt/spark/sbin/start-worker.sh spark://spark-master:7077 && tail -f /opt/spark/logs/*"]
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"
+
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase
+    ports:
+      - "3000:3000"
+    environment:
+      - MB_SITE_URL=http://localhost:3000
+    depends_on:
+      analyticsdb:
+        condition: service_healthy
 
 volumes:
   chatdb_data:
   analyticsdb_data:
+  temporal_pg_data:

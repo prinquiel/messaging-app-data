@@ -1,3 +1,5 @@
+# bash /Users/prindiquiel/Library/CloudStorage/OneDrive-UNADECA/coding-projects/messaging-app-data/trigger_workflow.sh
+
 # 💬 Messaging App 
 
 #  CÓMO PROBAR EL PROYECTO
@@ -103,6 +105,26 @@ ANALYTICS_DB_PORT=5432
 API_URL=http://api:8000
 ```
 
+
+### 3. Migraciones (Alembic)
+
+Usamos Alembic para mantener sincronizada la estructura de la base de datos.
+
+1. Entra a la carpeta del API:
+   ```bash
+   cd api
+   ```
+2. Instala dependencias (si aún no lo hiciste):
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Exporta las variables de conexión (DB_USER, DB_PASSWORD, etc.) y corre:
+   ```bash
+   alembic upgrade head
+   ```
+
+Esto crea la tabla `alembic_version` y agrega `password_hash` a `users` solo si falta.  
+Cada vez que se agregue una nueva migración basta con volver a ejecutar `alembic upgrade head`.
 
 
 ## 📖 Uso Paso a Paso

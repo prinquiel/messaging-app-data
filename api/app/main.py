@@ -1,5 +1,6 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi import BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from decimal import Decimal
 import json
 import os
@@ -15,6 +16,11 @@ import math
 
 from app.database import engine, get_db, Base
 from app import models, schemas
+from app.security import get_current_user
+from app.routers import auth as auth_router
+from app.routers import ws as ws_router
+from app.routers import chats as chats_router
+from app.routers import users as users_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,6 +30,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth_router.router)
+app.include_router(chats_router.router)
+app.include_router(users_router.router)
+app.include_router(ws_router.router)
 
 
 def paginate_query(
@@ -609,6 +627,126 @@ def delete_category(category_id: int, db: Session = Depends(get_db)):
     db.delete(category)
     db.commit()
     return
+
+
+@app.post("/marketplace/items/{item_id}/contact", response_model=schemas.Chat, status_code=status.HTTP_201_CREATED)
+def contact_seller(
+    item_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    item = (
+        db.query(models.MarketplaceItem)
+        .filter(models.MarketplaceItem.id == item_id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    if item.seller_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Eres el vendedor de este producto")
+
+    seller = db.query(models.User).filter(models.User.id == item.seller_id).first()
+    if not seller:
+        raise HTTPException(status_code=404, detail="Vendedor no encontrado")
+
+    buyer = db.query(models.User).filter(models.User.id == current_user.id).first()
+    if not buyer:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    cm_alias = models.chat_members.alias("cm2")
+    private_chat = (
+        db.query(models.Chat)
+        .join(models.chat_members)
+        .filter(models.Chat.chat_type == "private")
+        .filter(models.chat_members.c.user_id == current_user.id)
+        .join(cm_alias, models.Chat.id == cm_alias.c.chat_id)
+        .filter(cm_alias.c.user_id == seller.id)
+        .first()
+    )
+
+    if private_chat:
+        return private_chat
+
+    new_chat = models.Chat(
+        chat_type="private",
+        name=None,
+        description=f"Compra {item.title}",
+        created_by=current_user.id,
+    )
+    new_chat.members = [buyer, seller]
+    db.add(new_chat)
+    db.commit()
+    db.refresh(new_chat)
+    return new_chat
+
+
+def _get_or_create_seller_listing_chat(db: Session, seller: models.User) -> models.Chat:
+    chat = (
+        db.query(models.Chat)
+        .filter(
+            models.Chat.chat_type == "private",
+            models.Chat.created_by == seller.id,
+            models.Chat.description == "__marketplace_seller__",
+        )
+        .first()
+    )
+    if chat:
+        return chat
+
+    chat = models.Chat(
+        chat_type="private",
+        name=f"Seller {seller.username}",
+        description="__marketplace_seller__",
+        created_by=seller.id,
+    )
+    chat.members = [seller]
+    db.add(chat)
+    db.commit()
+    db.refresh(chat)
+    return chat
+
+
+@app.post("/marketplace/items", response_model=schemas.MarketplaceItem, status_code=status.HTTP_201_CREATED)
+def publish_marketplace_item(
+    payload: schemas.MarketplaceStandaloneCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    seller = db.query(models.User).filter(models.User.id == current_user.id).first()
+    if not seller:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    listing_chat = _get_or_create_seller_listing_chat(db, seller)
+    message_body = payload.message_content or (
+        f"{payload.title}\n{payload.description or ''}\n"
+        f"Precio: ₡{float(payload.price):,.0f}"
+    )
+    message = models.Message(
+        content=message_body,
+        sender_id=seller.id,
+        chat_id=listing_chat.id,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+
+    item_dict = payload.model_dump(exclude={"message_content"})
+    if item_dict.get("image_urls"):
+        item_dict["image_urls"] = json.dumps(item_dict["image_urls"])
+
+    item = models.MarketplaceItem(
+        message_id=message.id,
+        seller_id=seller.id,
+        chat_id=listing_chat.id,
+        **item_dict,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    if item.image_urls:
+        item.image_urls = json.loads(item.image_urls)
+    return item
 
 
 # ===================== Seller Profiles =====================

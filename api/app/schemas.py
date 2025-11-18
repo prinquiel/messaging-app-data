@@ -15,7 +15,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    pass
+    password: str
 
 
 class User(UserBase):
@@ -115,6 +115,11 @@ class MarketplaceItemBase(BaseModel):
 class MarketplaceItemCreate(MarketplaceItemBase):
     message_id: int
     chat_id: int
+
+
+class MarketplaceStandaloneCreate(MarketplaceItemBase):
+    message_content: Optional[str] = None
+    currency: str = Field(default='CRC', max_length=3)
 
 
 class MarketplaceItemUpdate(BaseModel):

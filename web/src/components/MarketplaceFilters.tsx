@@ -59,8 +59,11 @@ export default function MarketplaceFilters({ filters, onChange, categories, chat
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-[0.4em] text-white/50">Categoría</label>
+            <label htmlFor="category-filter" className="text-xs uppercase tracking-[0.4em] text-white/50">
+              Categoría
+            </label>
             <select
+              id="category-filter"
               className="glass-input w-full p-3 bg-transparent"
               value={filters.categoryId}
               onChange={(e) => handleChange('categoryId', e.target.value)}

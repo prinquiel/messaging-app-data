@@ -42,6 +42,7 @@ export default function SellItemModal({ open, onClose, categories: initialCatego
     if (!open) return
     if (initialCategories.length) return
     const loadCategories = async () => {
+      if (!token) return
       try {
         const { data } = await api.get('/categories?page=1&page_size=100', {
           headers: authHeaders(token),

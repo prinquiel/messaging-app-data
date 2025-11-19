@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from datetime import datetime
 from typing import Optional, List
 import json
@@ -24,8 +24,7 @@ class User(UserBase):
     created_at: datetime
     last_seen: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Chat Schemas
@@ -37,7 +36,7 @@ class ChatBase(BaseModel):
 
 
 class ChatCreate(ChatBase):
-    member_ids: List[int] = Field(..., min_items=2)
+    member_ids: List[int] = Field(..., min_length=2)
 
 
 class Chat(ChatBase):
@@ -45,8 +44,7 @@ class Chat(ChatBase):
     created_at: datetime
     created_by: Optional[int] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ChatWithMembers(Chat):
@@ -72,8 +70,7 @@ class Message(MessageBase):
     edited_at: Optional[datetime] = None
     is_deleted: bool
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MessageWithSender(Message):
@@ -143,8 +140,7 @@ class MarketplaceItem(MarketplaceItemBase):
     sold_at: Optional[datetime] = None
     image_urls: Optional[List[str]] = None  # Override to handle JSON conversion
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MarketplaceItemWithSeller(MarketplaceItem):
@@ -174,8 +170,7 @@ class MarketplaceCategory(MarketplaceCategoryBase):
     id: int
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Seller Profile Schemas
@@ -206,8 +201,7 @@ class SellerProfile(SellerProfileBase):
     updated_at: Optional[datetime] = None
     categories: Optional[List[MarketplaceCategory]] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Pagination Schema

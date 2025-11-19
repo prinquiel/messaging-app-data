@@ -12,6 +12,7 @@ from app.database import SessionLocal
 from app import models
 
 
+MAX_BCRYPT_BYTES = 72
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = HTTPBearer(auto_error=True)
 
@@ -28,14 +29,25 @@ def get_db() -> Session:
         db.close()
 
 
+def _normalize_password(password: str) -> str:
+    if password is None:
+        raise ValueError("Password must be provided")
+    encoded = password.encode("utf-8")
+    if len(encoded) <= MAX_BCRYPT_BYTES:
+        return password
+    return encoded[:MAX_BCRYPT_BYTES].decode("utf-8", "ignore")
+
+
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    normalized = _normalize_password(password)
+    return pwd_context.hash(normalized)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     if not password_hash:
         return False
-    return pwd_context.verify(password, password_hash)
+    normalized = _normalize_password(password)
+    return pwd_context.verify(normalized, password_hash)
 
 
 def create_access_token(subject: dict, expires_delta: Optional[timedelta] = None) -> str:

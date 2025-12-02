@@ -5,6 +5,7 @@ export type ChatSummary = {
   name?: string | null
   chat_type: string
   created_at: string
+  description?: string | null
   last_message?: string
   unread?: number
 }

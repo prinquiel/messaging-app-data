@@ -7,22 +7,25 @@ import os
 from pydantic import BaseModel as _BaseModel
 import uuid as _uuid
 import asyncio
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func
 from typing import List, Optional, Type
 from pydantic import BaseModel
 from pydantic import ValidationError as _PydValidationError
 import math
 
-from app.database import engine, get_db, Base
+from app.database import engine, get_db, Base, SessionLocal
 from app import models, schemas
 from app.security import get_current_user
 from app.routers import auth as auth_router
 from app.routers import ws as ws_router
 from app.routers import chats as chats_router
 from app.routers import users as users_router
+from app.defaults import seed_default_categories
 
 Base.metadata.create_all(bind=engine)
+with SessionLocal() as _startup_session:
+    seed_default_categories(_startup_session)
 
 app = FastAPI(
     title="Messaging App API",
@@ -122,6 +125,18 @@ def paginate_query(
     return result
 
 
+def _ensure_category_exists(db: Session, category_id: Optional[int]) -> Optional[int]:
+    if category_id is None:
+        return None
+    exists = (
+        db.query(models.MarketplaceCategory.id)
+        .filter(models.MarketplaceCategory.id == category_id)
+        .first()
+    )
+    if not exists:
+        raise HTTPException(status_code=400, detail="La categoría seleccionada no existe")
+    return category_id
+
 
 @app.get("/")
 async def root():
@@ -214,7 +229,13 @@ def get_chats(
     db: Session = Depends(get_db)
 ):
     """Obtener lista de chats con paginación"""
-    query = db.query(models.Chat).order_by(models.Chat.created_at.desc())
+    query = (
+        db.query(models.Chat)
+        .filter(
+            (models.Chat.description.is_(None)) | (models.Chat.description != "__marketplace_seller__")
+        )
+        .order_by(models.Chat.created_at.desc())
+    )
     
     if chat_type:
         query = query.filter(models.Chat.chat_type == chat_type)
@@ -399,7 +420,9 @@ def convert_message_to_listing(
         pass  
     
     # Crear el marketplace item
+    validated_category = _ensure_category_exists(db, item_data.category_id)
     item_dict = item_data.model_dump()
+    item_dict['category_id'] = validated_category
     item_dict['seller_id'] = message.sender_id
     item_dict['message_id'] = message_id
     item_dict['image_urls'] = json.dumps(item_data.image_urls) if item_data.image_urls else None
@@ -629,7 +652,7 @@ def delete_category(category_id: int, db: Session = Depends(get_db)):
     return
 
 
-@app.post("/marketplace/items/{item_id}/contact", response_model=schemas.Chat, status_code=status.HTTP_201_CREATED)
+@app.post("/marketplace/items/{item_id}/contact", response_model=schemas.ChatWithMembers, status_code=status.HTTP_201_CREATED)
 def contact_seller(
     item_id: int,
     current_user: models.User = Depends(get_current_user),
@@ -666,6 +689,12 @@ def contact_seller(
     )
 
     if private_chat:
+        private_chat = (
+            db.query(models.Chat)
+            .options(selectinload(models.Chat.members))
+            .filter(models.Chat.id == private_chat.id)
+            .first()
+        )
         return private_chat
 
     new_chat = models.Chat(
@@ -677,7 +706,12 @@ def contact_seller(
     new_chat.members = [buyer, seller]
     db.add(new_chat)
     db.commit()
-    db.refresh(new_chat)
+    new_chat = (
+        db.query(models.Chat)
+        .options(selectinload(models.Chat.members))
+        .filter(models.Chat.id == new_chat.id)
+        .first()
+    )
     return new_chat
 
 
@@ -731,7 +765,9 @@ def publish_marketplace_item(
     db.commit()
     db.refresh(message)
 
+    validated_category = _ensure_category_exists(db, payload.category_id)
     item_dict = payload.model_dump(exclude={"message_content"})
+    item_dict["category_id"] = validated_category
     if item_dict.get("image_urls"):
         item_dict["image_urls"] = json.dumps(item_dict["image_urls"])
 

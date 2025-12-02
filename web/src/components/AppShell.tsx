@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Bell, Plus, Search, ShoppingBag } from 'lucide-react'
+import { MessageCirclePlus, Plus, Search, ShoppingBag } from 'lucide-react'
 import { api, authHeaders } from '../lib/api'
 import { useAuth } from '../auth/AuthContext'
 import { useChatStore } from '../store/chatStore'
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
 import LanguageToggle from './LanguageToggle'
+
+const INTERNAL_MARKETPLACE_DESCRIPTION = '__marketplace_seller__'
+
 export default function AppShell() {
-  const { token, logout } = useAuth()
+  const { token, logout, user } = useAuth()
   const { chats, setChats } = useChatStore()
   const [isFetching, setIsFetching] = useState(false)
   const location = useLocation()
@@ -22,11 +25,13 @@ export default function AppShell() {
       .get('/me/chats', { headers: authHeaders(token) })
       .then(({ data }) => {
         const items = Array.isArray(data) ? data : data.items || []
-        const enhanced = items.map((chat: any) => ({
-          ...chat,
-          unread: chat.id % 4 === 0 ? Math.floor(Math.random() * 5) + 1 : 0,
-          last_message: chat.description ?? '¡Charla lista!',
-        }))
+        const enhanced = items
+          .filter((chat: any) => chat.description !== INTERNAL_MARKETPLACE_DESCRIPTION)
+          .map((chat: any) => ({
+            ...chat,
+            unread: chat.id % 4 === 0 ? Math.floor(Math.random() * 5) + 1 : 0,
+            last_message: chat.description ?? '¡Charla lista!',
+          }))
         setChats(enhanced)
       })
       .finally(() => setIsFetching(false))
@@ -47,18 +52,18 @@ export default function AppShell() {
               <button className="glass-panel p-2 rounded-2xl hover:bg-white/10 transition">
                 <Search className="w-5 h-5" />
               </button>
-              <button className="glass-panel p-2 rounded-2xl hover:bg-white/10 transition">
-                <Plus className="w-5 h-5" />
-              </button>
               <Link
                 to="/marketplace"
-                className="glass-panel p-2 rounded-2xl hover:bg-white/10 transition relative"
+                className="glass-panel px-3 py-2 rounded-2xl hover:bg-white/10 transition flex items-center gap-2"
               >
-                <ShoppingBag className="w-5 h-5" />
+                <span className="text-sm font-semibold">Marketplace</span>
               </Link>
-              <button className="glass-panel p-2 rounded-2xl hover:bg-white/10 transition relative">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-rose-400" />
+              <button
+                onClick={() => navigate('/')}
+                className="glass-panel px-3 py-2 rounded-2xl hover:bg-white/10 transition flex items-center gap-2"
+              >
+                <MessageCirclePlus className="w-5 h-5" />
+                <span className="text-sm font-semibold">Crear chat</span>
               </button>
               <button
                 onClick={() => navigate('/')}
@@ -73,7 +78,9 @@ export default function AppShell() {
                   <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-400 border-2 border-slate-900" />
                 </div>
                 <div className="text-left">
-                  <p className="font-semibold leading-tight">Tú</p>
+                  <p className="font-semibold leading-tight">
+                    {user?.full_name || user?.username || 'Tu cuenta'}
+                  </p>
                   <p className="text-xs text-white/60">Disponible</p>
                 </div>
               </button>

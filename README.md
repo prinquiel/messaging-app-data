@@ -377,6 +377,37 @@ curl "http://localhost:8000/users?page=1&page_size=10"
 ```
 
 
+---
+
+## 🌐 Infraestructura en DigitalOcean
+
+- **Terraform**: toda la definición de droplets vive en `infra/terraform`. Ahí
+  se crean siete droplets separados (backend, frontend, Metabase, Spark,
+  Temporal, Grafana prod y Grafana staging aislado).
+- **Cómo usarlo en local**:
+  1. `cd infra/terraform`
+  2. `cp terraform.tfvars.example terraform.tfvars` y llena `do_token`, `region`
+     y `ssh_key_ids` (IDs o fingerprints de tus llaves en DigitalOcean).
+  3. `terraform init && terraform plan`
+  4. `terraform apply` cuando esté todo listo.
+- **Control de cambios**: el branch `main` solo admite cambios mediante Pull
+  Requests. Un flujo directo (push) fallará en CI para forzar el uso de PR.
+- **Deploy automático**: al hacer merge a `main`, un workflow de GitHub Actions
+  ejecuta `terraform fmt`, `terraform plan` y `terraform apply` usando el
+  archivo de infraestructura. Define los secretos:
+  - `DIGITALOCEAN_ACCESS_TOKEN`: token personal con permisos de escritura.
+  - `TF_VAR_ssh_key_ids`: lista en formato JSON con los IDs/fingerprints de las
+    llaves autorizadas (ej. `["123456","654321"]`). Si prefieres, puedes
+    definirlas dentro de `terraform.tfvars` y omitir el secreto en GitHub.
+  - Opcionalmente `TF_VAR_region`, `TF_VAR_default_size` y
+    `TF_VAR_SERVICE_OVERRIDES` (todos en formato JSON válido) para ajustar
+    parámetros desde CI.
+
+> ℹ️ Recomendación: mueve el estado (`terraform.tfstate`) a un backend remoto
+> asegurado (Terraform Cloud, S3 compatible, etc.) antes del primer `apply` en
+> producción para evitar condiciones de carrera.
+
+
 
 
 

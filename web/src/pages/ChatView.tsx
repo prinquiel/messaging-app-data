@@ -23,14 +23,14 @@ type ChatMessage = {
 
 type ChatMember = {
   id: number
-  username: string
-  full_name: string
+  username?: string
+  full_name?: string
 }
 
 export default function ChatView() {
   const { id } = useParams()
   const chatId = Number(id)
-  const { token, userId } = useAuth()
+  const { token, userId, user } = useAuth()
   const { chats, setActiveChat, markAsRead } = useChatStore()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatMeta, setChatMeta] = useState<{ name?: string; chat_type?: string; members?: ChatMember[] }>({})
@@ -54,6 +54,19 @@ export default function ChatView() {
   const currentChat = chats.find((c) => c.id === chatId)
 
   useEffect(() => {
+    setChatMeta({})
+  }, [chatId])
+
+  useEffect(() => {
+    if (!currentChat) return
+    setChatMeta((prev) => ({
+      ...prev,
+      name: currentChat.name ?? prev.name,
+      chat_type: currentChat.chat_type ?? prev.chat_type,
+    }))
+  }, [currentChat])
+
+  useEffect(() => {
     if (!chatId || !token) return
     setActiveChat(chatId)
     markAsRead(chatId)
@@ -74,21 +87,27 @@ export default function ChatView() {
   }, [chatId, token, setActiveChat, markAsRead])
 
   useEffect(() => {
-    if (!token || !chatId || currentChat) return
+    if (!token || !chatId) return
+    let cancelled = false
     const loadChat = async () => {
       try {
         const { data } = await api.get(`/chats/${chatId}`, { headers: authHeaders(token) })
-        setChatMeta({
-          name: data.name,
-          chat_type: data.chat_type,
+        if (cancelled) return
+        setChatMeta((prev) => ({
+          ...prev,
+          name: data.name ?? prev.name,
+          chat_type: data.chat_type ?? prev.chat_type,
           members: data.members,
-        })
+        }))
       } catch (error) {
         console.error('No se pudo obtener el chat', error)
       }
     }
     loadChat()
-  }, [chatId, token, currentChat])
+    return () => {
+      cancelled = true
+    }
+  }, [chatId, token])
 
   const wsUrl = useMemo(() => {
     if (!chatId || !token) return null
@@ -153,21 +172,31 @@ export default function ChatView() {
   const members = chatMeta.members || []
   const peers = members.filter((member) => member.id !== userId)
   const activePeers = peers.filter((member) => onlineUserIds.includes(member.id))
-  let presenceLabel: string | undefined
-  if (peers.length) {
-    if ((subtitle || chatMeta.chat_type) === 'private') {
-      presenceLabel = activePeers.length ? 'En línea' : 'Desconectado'
-    } else {
-      presenceLabel = `${activePeers.length}/${peers.length} conectados`
-    }
-  }
   const remoteIndicatorOnline = activePeers.length > 0
 
   let unreadInserted = false
 
+  const memberLookup = useMemo(() => {
+    const map = new Map<number, string>()
+    members.forEach((member) => {
+      map.set(member.id, member.full_name || member.username || `Usuario ${member.id}`)
+    })
+    return map
+  }, [members])
+
+  const resolveSenderName = useCallback(
+    (senderId: number) => {
+      if (senderId === userId) {
+        return user?.full_name || user?.username || 'Tú'
+      }
+      return memberLookup.get(senderId) || `Usuario ${senderId}`
+    },
+    [memberLookup, userId, user],
+  )
+
   return (
     <div className="h-full flex flex-col">
-      <ChatHeader chatId={chatId} title={title} subtitle={subtitle} presenceLabel={presenceLabel} />
+      <ChatHeader chatId={chatId} title={title} subtitle={subtitle} />
 
       <div ref={scrollerRef} className="flex-1 overflow-y-auto scroll-area px-8 py-6 space-y-4">
         <AnimatePresence initial={false}>
@@ -182,12 +211,10 @@ export default function ChatView() {
                 {showDivider && <UnreadSeparator />}
                 <MessageBubble
                   content={msg.content}
-                  senderName={msg.sender_id === userId ? 'Tú' : `Usuario ${msg.sender_id}`}
+                  senderName={resolveSenderName(msg.sender_id)}
                   timestamp={msg.sent_at}
                   isOwn={msg.sender_id === userId}
-                  onSell={
-                    msg.sender_id === userId ? () => setSellMessage(msg) : undefined
-                  }
+                  onSell={msg.sender_id === userId ? () => setSellMessage(msg) : undefined}
                 />
               </div>
             )
@@ -197,10 +224,8 @@ export default function ChatView() {
       </div>
 
       <div className="px-8 pb-6 space-y-3">
-        <div className="flex items-center gap-2 text-xs text-white/60">
-          <span className={`h-2 w-2 rounded-full ${remoteIndicatorOnline ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-          {presenceLabel || 'Desconectado'}
-          <span className="text-white/40">·</span>
+        <div className="flex items-center gap-3 text-xs text-white/60">
+          <span className={`h-2 w-2 rounded-full ${remoteIndicatorOnline ? 'bg-emerald-400' : 'bg-white/30'}`} />
           <span className="flex items-center gap-1">
             <span className={`h-2 w-2 rounded-full ${connected ? 'bg-sky-400' : 'bg-rose-400'}`} />
             {connected ? 'WS activo' : 'Reconectando WS'}

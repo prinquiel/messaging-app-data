@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { api, authHeaders } from '../lib/api'
 import MarketplaceCard, { MarketplaceItem } from '../components/MarketplaceCard'
 import MarketplaceFilters, { MarketplaceFilters as FilterState } from '../components/MarketplaceFilters'
 import { useChatStore } from '../store/chatStore'
-import { useNavigate } from 'react-router-dom'
 import SellItemModal from '../components/ListingModal'
 
 type Category = {
@@ -99,12 +99,20 @@ export default function MarketplacePage() {
     <div className="h-full flex flex-col gap-6 px-8 py-6 overflow-y-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <MarketplaceFilters filters={filters} onChange={setFilters} categories={categoryOptions} chats={chats} />
-        <button
-          onClick={() => setShowModal(true)}
-          className="glass-panel px-4 py-2 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-semibold transition"
-        >
-          Publicar producto
-        </button>
+        <div className="flex gap-3">
+          <Link
+            to="/marketplace/manage"
+            className="glass-panel px-4 py-2 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-semibold transition"
+          >
+            Mis productos
+          </Link>
+          <button
+            onClick={() => setShowModal(true)}
+            className="glass-panel px-4 py-2 rounded-2xl bg-white/10 hover:bg-white/20 text-sm font-semibold transition"
+          >
+            Publicar producto
+          </button>
+        </div>
       </div>
 
       {loading && (

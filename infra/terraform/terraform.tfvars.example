@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars and fill with real values before running Terraform
+do_token     = "dop_v1_xxxxx"
+region       = "nyc3"
+ssh_key_ids  = ["12345678"]
+
+service_overrides = {
+  spark-prod = {
+    size = "s-8vcpu-16gb"
+  }
+
+  grafana-staging = {
+    region = "sfo3"
+  }
+}
+

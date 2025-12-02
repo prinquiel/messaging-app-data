@@ -5,6 +5,7 @@ import RegisterPage from './pages/RegisterPage'
 import ChatsPage from './pages/ChatsPage'
 import ChatView from './pages/ChatView'
 import MarketplacePage from './pages/MarketplacePage'
+import MarketplaceManagerPage from './pages/MarketplaceManagerPage'
 import AppShell from './components/AppShell'
 
 function PrivateLayout() {
@@ -22,6 +23,7 @@ export default function App() {
         <Route index element={<ChatsPage />} />
         <Route path="/chats/:id" element={<ChatView />} />
         <Route path="/marketplace" element={<MarketplacePage />} />
+        <Route path="/marketplace/manage" element={<MarketplaceManagerPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>

@@ -29,6 +29,12 @@ export default function SellItemModal({ open, onClose, categories: initialCatego
   const [error, setError] = useState('')
 
   useEffect(() => {
+    if (initialCategories.length) {
+      setCategories(initialCategories)
+    }
+  }, [initialCategories])
+
+  useEffect(() => {
     if (!open) return
     setTitle('')
     setDescription(message?.content ?? '')

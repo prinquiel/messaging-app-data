@@ -1,0 +1,71 @@
+name: Terraform DigitalOcean Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_CLI_ARGS_plan: "-input=false"
+  TF_CLI_ARGS_apply: "-input=false"
+  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+  TF_VAR_ssh_key_ids: ${{ secrets.TF_VAR_SSH_KEY_IDS }}
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure Terraform secrets exist
+        run: |
+          if [ -z "$TF_VAR_do_token" ]; then
+            echo "::error::Falta el secreto DIGITALOCEAN_ACCESS_TOKEN / TF_VAR_do_token."
+            exit 1
+          fi
+
+          if [ -z "$TF_VAR_ssh_key_ids" ]; then
+            echo "::error::Define TF_VAR_SSH_KEY_IDS como JSON (ej. [\"123456\"])."
+            exit 1
+          fi
+
+      - name: Export optional Terraform vars
+        run: |
+          if [ -n "${{ secrets.TF_VAR_REGION }}" ]; then
+            echo "TF_VAR_region=${{ secrets.TF_VAR_REGION }}" >> "$GITHUB_ENV"
+          fi
+
+          if [ -n "${{ secrets.TF_VAR_DEFAULT_SIZE }}" ]; then
+            echo "TF_VAR_default_size=${{ secrets.TF_VAR_DEFAULT_SIZE }}" >> "$GITHUB_ENV"
+          fi
+
+          if [ -n "${{ secrets.TF_VAR_SERVICE_OVERRIDES }}" ]; then
+            echo "TF_VAR_service_overrides=${{ secrets.TF_VAR_SERVICE_OVERRIDES }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -out=tfplan
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve tfplan
+

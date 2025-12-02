@@ -1,0 +1,26 @@
+name: Enforce PR merges on main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  guard-main:
+    name: Block direct pushes to main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate merge commit origin
+        env:
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          if [[ "$HEAD_MESSAGE" =~ ^Merge\ pull\ request\ #[0-9]+ ]]; then
+            echo "✅ main se actualizó mediante un PR."
+            exit 0
+          fi
+
+          echo "::error::Solo se puede actualizar main mediante Pull Requests. $ACTOR hizo push directo con el mensaje: $HEAD_MESSAGE"
+          echo "Si es un cambio urgente, abre un PR o reconfigura la rama desde la interfaz de GitHub."
+          exit 1
+

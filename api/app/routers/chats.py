@@ -1,13 +1,19 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import models, schemas
 from app.database import get_db
 from app.security import get_current_user
 
 router = APIRouter(prefix="", tags=["chats"])
+
+
+def _exclude_internal_chats(query):
+    return query.filter(
+        (models.Chat.description.is_(None)) | (models.Chat.description != "__marketplace_seller__")
+    )
 
 
 @router.get("/me/chats", response_model=List[schemas.Chat])
@@ -19,9 +25,9 @@ def get_my_chats(
         db.query(models.Chat)
         .join(models.chat_members, models.Chat.id == models.chat_members.c.chat_id)
         .filter(models.chat_members.c.user_id == current_user.id)
-        .order_by(models.Chat.created_at.desc())
-        .all()
+        .options(selectinload(models.Chat.members))
     )
+    chats = _exclude_internal_chats(chats).order_by(models.Chat.created_at.desc()).all()
     return chats
 
 
@@ -34,9 +40,9 @@ def get_user_chats(user_id: int, db: Session = Depends(get_db)):
         db.query(models.Chat)
         .join(models.chat_members, models.Chat.id == models.chat_members.c.chat_id)
         .filter(models.chat_members.c.user_id == user_id)
-        .order_by(models.Chat.created_at.desc())
-        .all()
+        .options(selectinload(models.Chat.members))
     )
+    chats = _exclude_internal_chats(chats).order_by(models.Chat.created_at.desc()).all()
     return chats
 
 
@@ -44,7 +50,7 @@ class MyChatCreate(schemas.ChatBase):
     member_ids: Optional[List[int]] = None
 
 
-@router.post("/me/chats", response_model=schemas.Chat, status_code=201)
+@router.post("/me/chats", response_model=schemas.ChatWithMembers, status_code=201)
 def create_my_chat(
     payload: MyChatCreate,
     current_user: models.User = Depends(get_current_user),
@@ -71,7 +77,12 @@ def create_my_chat(
     chat.members = members
     db.add(chat)
     db.commit()
-    db.refresh(chat)
+    chat = (
+        db.query(models.Chat)
+        .options(selectinload(models.Chat.members))
+        .filter(models.Chat.id == chat.id)
+        .first()
+    )
     return chat
 
 

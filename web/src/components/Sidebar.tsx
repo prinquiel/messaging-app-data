@@ -20,27 +20,6 @@ export default function Sidebar({ isLoading }: Props) {
 
   return (
     <aside className="w-[320px] hidden md:flex flex-col gap-5 pl-4 py-4">
-      <div className="glass-panel rounded-3xl p-5 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-white/50">vortex</p>
-            <h2 className="text-xl font-semibold">Messenger</h2>
-          </div>
-          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-            <Sparkles className="w-5 h-5" />
-          </div>
-        </div>
-        <div className="text-sm text-white/60">
-          Conversaciones ultrarrápidas, cifrado extremo a extremo, status en vivo.
-        </div>
-        <button
-          onClick={() => navigate('/')}
-          className="w-full rounded-2xl bg-white/10 hover:bg-white/20 text-sm py-3 font-semibold transition"
-        >
-          Nuevo canal
-        </button>
-      </div>
-
       <div className="glass-panel flex-1 rounded-3xl overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/5">
           <div>

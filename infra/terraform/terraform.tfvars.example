@@ -4,12 +4,13 @@ region       = "nyc3"
 ssh_key_ids  = ["12345678"]
 
 service_overrides = {
-  spark-prod = {
-    size = "s-8vcpu-16gb"
+  core-prod = {
+    size = "s-6vcpu-16gb"
   }
 
-  grafana-staging = {
+  analytics-prod = {
     region = "sfo3"
+    backups = false
   }
 }
 

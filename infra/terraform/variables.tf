@@ -36,8 +36,8 @@ variable "ssh_key_ids" {
 variable "service_overrides" {
   description = <<EOT
 Optional per-service overrides. Keys must match one of the default services
-(backend-prod, frontend-prod, metabase-prod, spark-prod, temporal-prod, grafana-prod, grafana-staging).
-Only provide the attributes that need to change.
+(core-prod, frontend-prod, analytics-prod). Only provide the attributes that
+need to change.
 EOT
 
   type = map(object({

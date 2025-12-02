@@ -381,9 +381,11 @@ curl "http://localhost:8000/users?page=1&page_size=10"
 
 ## 🌐 Infraestructura en DigitalOcean
 
-- **Terraform**: toda la definición de droplets vive en `infra/terraform`. Ahí
-  se crean siete droplets separados (backend, frontend, Metabase, Spark,
-  Temporal, Grafana prod y Grafana staging aislado).
+- **Terraform**: toda la definición de droplets vive en `infra/terraform`. El
+  plan actual despliega tres droplets:
+  1. `msg-core-prod`: FastAPI backend + Temporal.
+  2. `msg-frontend-prod`: frontend Vite/React.
+  3. `msg-analytics-prod`: Metabase, Spark/ETL y Grafana en el mismo host.
 - **Cómo usarlo en local**:
   1. `cd infra/terraform`
   2. `cp terraform.tfvars.example terraform.tfvars` y llena `do_token`, `region`

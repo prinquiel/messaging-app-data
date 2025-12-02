@@ -89,7 +89,7 @@ locals {
 
   services = {
     for key, defaults in local.default_services :
-    key => merge(defaults, lookup(var.service_overrides, key, {}))
+    key => merge(defaults, try(var.service_overrides[key], {}))
   }
 }
 

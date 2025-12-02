@@ -2,23 +2,23 @@ locals {
   default_tags = ["messaging-app"]
 
   default_services = {
-    backend-prod = {
-      name        = "msg-backend-prod"
+    core-prod = {
+      name        = "msg-core-prod"
       environment = "prod"
       region      = null
-      size        = "s-2vcpu-4gb"
+      size        = "s-4vcpu-8gb"
       image       = null
       backups     = true
       ipv6        = true
       monitoring  = true
-      tags        = ["backend", "api"]
+      tags        = ["backend", "temporal", "api"]
     }
 
     frontend-prod = {
       name        = "msg-frontend-prod"
       environment = "prod"
       region      = null
-      size        = "s-1vcpu-2gb"
+      size        = "s-2vcpu-4gb"
       image       = null
       backups     = false
       ipv6        = true
@@ -26,64 +26,16 @@ locals {
       tags        = ["frontend", "web"]
     }
 
-    metabase-prod = {
-      name        = "msg-metabase-prod"
+    analytics-prod = {
+      name        = "msg-analytics-prod"
       environment = "prod"
       region      = null
-      size        = "s-2vcpu-4gb"
+      size        = "s-8vcpu-16gb"
       image       = null
       backups     = true
       ipv6        = true
       monitoring  = true
-      tags        = ["analytics", "metabase"]
-    }
-
-    spark-prod = {
-      name        = "msg-spark-prod"
-      environment = "prod"
-      region      = null
-      size        = "s-4vcpu-8gb"
-      image       = null
-      backups     = false
-      ipv6        = true
-      monitoring  = true
-      tags        = ["analytics", "spark"]
-    }
-
-    temporal-prod = {
-      name        = "msg-temporal-prod"
-      environment = "prod"
-      region      = null
-      size        = "s-2vcpu-4gb"
-      image       = null
-      backups     = true
-      ipv6        = true
-      monitoring  = true
-      tags        = ["temporal", "workers"]
-    }
-
-    grafana-prod = {
-      name        = "msg-grafana-prod"
-      environment = "prod"
-      region      = null
-      size        = "s-1vcpu-2gb"
-      image       = null
-      backups     = true
-      ipv6        = true
-      monitoring  = true
-      tags        = ["grafana", "monitoring"]
-    }
-
-    grafana-staging = {
-      name        = "msg-grafana-staging"
-      environment = "staging"
-      region      = null
-      size        = "s-1vcpu-1gb"
-      image       = null
-      backups     = false
-      ipv6        = true
-      monitoring  = true
-      tags        = ["grafana", "monitoring", "staging"]
+      tags        = ["analytics", "metabase", "spark", "grafana"]
     }
   }
 

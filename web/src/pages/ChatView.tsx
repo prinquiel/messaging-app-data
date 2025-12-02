@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../auth/AuthContext'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { api, authHeaders } from '../lib/api'
+import { api, authHeaders, API_URL } from '../lib/api'
 import ChatHeader from '../components/ChatHeader'
 import MessageBubble from '../components/MessageBubble'
 import ChatComposer from '../components/ChatComposer'
@@ -111,7 +111,7 @@ export default function ChatView() {
 
   const wsUrl = useMemo(() => {
     if (!chatId || !token) return null
-    const url = new URL(`ws://localhost:8000/ws/chats/${chatId}`)
+    const url = new URL(`${API_URL.replace("http", "ws")}/ws/chats/${chatId}`)
     url.searchParams.set('token', token)
     return url.toString()
   }, [chatId, token])

@@ -13,4 +13,6 @@ infra/terraform/terraform.tfstate.*
 infra/terraform/*.tfplan
 *.tfstate
 *.tfstate.backup
+web/node_modules/
+web/.npm-cache/
 

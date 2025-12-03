@@ -6,6 +6,9 @@ import './index.css'
 import { AuthProvider } from './auth/AuthContext'
 import { ThemeProvider } from './theme/ThemeProvider'
 import { LocaleProvider } from './theme/LocaleProvider'
+import { initAnalytics } from './lib/analytics'
+
+void initAnalytics()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

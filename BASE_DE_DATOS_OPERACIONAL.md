@@ -14,10 +14,9 @@ A grandes rasgos, así se relacionan las tablas:
 - Un chat contiene muchos mensajes; cada mensaje pertenece a un único chat. Por eso `messages` tiene `chat_id`.
 - Un usuario puede enviar muchos mensajes; cada mensaje tiene un único remitente. Por eso `messages` tiene `sender_id`.
 - Algunos mensajes pueden transformarse en un listado de marketplace. Esa relación es uno‑a‑uno opcional: `marketplace_items.message_id` referencia al mensaje original.
-- Cada listado pertenece a un chat (donde se publicó) y a un vendedor (el autor). Por eso `marketplace_items` guarda `chat_id` y `seller_id`.
-- Una compra vincula un listado con un comprador y un vendedor. En `purchases` está `item_id`, `buyer_id` y `seller_id`.
-- Cada compra puede generar exactamente una calificación del vendedor. Esa relación es uno‑a‑uno entre `purchases` y `seller_ratings` mediante `purchase_id` único.
-- Las reglas de borrado en cascada mantienen la consistencia: si se elimina un usuario, se eliminan sus mensajes/listados/compras/calificaciones; si se elimina un chat, se eliminan sus mensajes y listados; si se elimina un mensaje listado, también desaparece el listado asociado.
+- Cada listado pertenece a un chat (donde se publicó), a un vendedor (el autor) y puede etiquetarse con una categoría. Por eso `marketplace_items` guarda `chat_id`, `seller_id` y `category_id`.
+- Los vendedores crean un `seller_profile` (1:1 con `users`) que se conecta con múltiples `marketplace_categories` mediante la tabla puente `seller_categories`.
+- Las reglas de borrado en cascada mantienen la consistencia: si se elimina un usuario, se eliminan sus mensajes/listados/perfiles y vínculos de categoría; si se elimina un chat, se eliminan sus mensajes y listados; si se elimina un mensaje listado, también desaparece el listado asociado.
 
 
 ## Entidades principales
@@ -28,6 +27,7 @@ Representa a cada persona en la plataforma.
 - username (UNIQUE, NOT NULL)
 - email (UNIQUE, NOT NULL)
 - full_name (NOT NULL)
+- password_hash (NULL hasta que configure credenciales locales)
 - phone_number (NULL)
 - bio (NULL)
 - avatar_url (NULL)
@@ -39,8 +39,7 @@ Relaciones:
 - 1:N con messages (un usuario envía muchos mensajes)
 - M:N con chats mediante chat_members
 - 1:N con marketplace_items (como vendedor)
-- 1:N con purchases (como comprador y como vendedor)
-- 1:N con seller_ratings (como vendedor calificado y como comprador que califica)
+- 1:1 opcional con seller_profiles (cada usuario puede tener un perfil de vendedor)
 
 ### chats
 Conversaciones privadas o grupales.
@@ -77,12 +76,48 @@ Mensajes enviados en los chats.
 Relaciones:
 - 1:1 opcional con marketplace_items (un mensaje puede convertirse en un listado)
 
+
+### marketplace_categories
+Catálogo de categorías para organizar los listados.
+- id (PK)
+- name (UNIQUE, NOT NULL)
+- description (NULL)
+- created_at (TIMESTAMPTZ, por defecto now())
+
+Relaciones:
+- 1:N con marketplace_items (una categoría agrupa muchos listados)
+- M:N con seller_profiles mediante seller_categories
+
+
+### seller_profiles
+Perfiles públicos opcionales que enriquecen la identidad del vendedor.
+- id (PK)
+- user_id (FK → users.id, UNIQUE, NOT NULL, ON DELETE CASCADE)
+- display_name (NULL)
+- bio (NULL)
+- location (NULL)
+- contact_info (NULL)
+- created_at (TIMESTAMPTZ, por defecto now())
+- updated_at (TIMESTAMPTZ, se refresca en cambios)
+
+Relaciones:
+- 1:1 con users (cada usuario tiene a lo sumo un perfil de vendedor)
+- M:N con marketplace_categories mediante seller_categories
+
+
+### seller_categories (tabla de unión)
+Conecta perfiles de vendedor con las categorías que dominan.
+- seller_profile_id (PK, FK → seller_profiles.id, ON DELETE CASCADE)
+- category_id (PK, FK → marketplace_categories.id, ON DELETE CASCADE)
+- linked_at (TIMESTAMPTZ, por defecto now())
+
 ### marketplace_items
 Listados de productos creados a partir de un mensaje.
 - id (PK)
 - message_id (FK → messages.id, UNIQUE, NOT NULL, ON DELETE CASCADE)
 - seller_id (FK → users.id, NOT NULL, ON DELETE CASCADE)
 - chat_id (FK → chats.id, NOT NULL, ON DELETE CASCADE)
+- category_id (FK → marketplace_categories.id, NULL, ON DELETE SET NULL)
 - title (NOT NULL)
 - description (NULL)
 - price (NUMERIC(10,2), NOT NULL)
@@ -95,35 +130,10 @@ Listados de productos creados a partir de un mensaje.
 - sold_at (TIMESTAMPTZ, NULL)
 
 Relaciones:
-- 1:N con purchases (un listado puede tener varios intentos/registro de compras)
-
-### purchases
-Transacciones de compra de listados.
-- id (PK)
-- item_id (FK → marketplace_items.id, NOT NULL, ON DELETE CASCADE)
-- buyer_id (FK → users.id, NOT NULL, ON DELETE CASCADE)
-- seller_id (FK → users.id, NOT NULL, ON DELETE CASCADE)
-- amount (NUMERIC(10,2), NOT NULL)
-- currency (por defecto "USD")
-- paypal_order_id (UNIQUE, NULL)
-- paypal_payment_id (UNIQUE, NULL)
-- paypal_status (NULL; created|approved|completed|cancelled)
-- status (por defecto "pending"; pending|completed|cancelled|refunded)
-- created_at (TIMESTAMPTZ)
-- completed_at (TIMESTAMPTZ, NULL)
-
-Relaciones:
-- 1:1 con seller_ratings (cada compra puede tener a lo sumo una calificación)
-
-### seller_ratings
-Calificaciones de vendedores asociadas a compras específicas.
-- id (PK)
-- seller_id (FK → users.id, NOT NULL, ON DELETE CASCADE)
-- buyer_id (FK → users.id, NOT NULL, ON DELETE CASCADE)
-- purchase_id (FK → purchases.id, UNIQUE, NOT NULL, ON DELETE CASCADE)
-- rating (INT, 1 a 5, NOT NULL)
-- comment (TEXT, NULL)
-- created_at (TIMESTAMPTZ)
+- 1:1 con messages (cada listado proviene de un único mensaje)
+- N:1 con users (el vendedor original)
+- N:1 con chats (el chat donde se publicó)
+- N:1 opcional con marketplace_categories
 
 ## Relaciones clave y cardinalidades
 
@@ -133,22 +143,22 @@ Calificaciones de vendedores asociadas a compras específicas.
 - messages → marketplace_items: 1:1 opcional (solo algunos mensajes se convierten en listados).
 - users → marketplace_items: 1:N (un vendedor puede tener muchos listados).
 - chats → marketplace_items: 1:N (un chat puede alojar muchos listados).
-- marketplace_items → purchases: 1:N.
-- users → purchases: 1:N como comprador; 1:N como vendedor.
-- purchases → seller_ratings: 1:1.
+- marketplace_items → marketplace_categories: N:1 opcional.
+- users ↔ seller_profiles: 1:1 (un perfil por usuario).
+- seller_profiles ↔ marketplace_categories: M:N mediante seller_categories.
 
 ## Reglas de integridad y borrado
 
-- ON DELETE CASCADE en chat_members, messages, marketplace_items, purchases y seller_ratings para evitar huérfanos.
-- ON DELETE SET NULL en chats.created_by para conservar el chat aun si se borra el creador.
+- ON DELETE CASCADE en chat_members, messages, marketplace_items, seller_profiles y seller_categories para evitar huérfanos al eliminar usuarios o chats.
+- ON DELETE SET NULL en chats.created_by y en marketplace_items.category_id para conservar el registro aun si el referente desaparece.
 
 
 
 ## Flujo funcional resumido
 
-1. Un usuario crea o participa en un chat (chat_members).
-2. Envía mensajes (messages). Algunos mensajes pueden convertirse en listados (marketplace_items) dentro del mismo chat.
-3. Otros usuarios del chat pueden comprar esos listados (purchases). El vendedor y el comprador quedan registrados.
-4. Tras una compra completada, el comprador puede calificar al vendedor (seller_ratings) exactamente una vez por compra.
+1. Un usuario crea o participa en un chat (chat_members) y mantiene su actividad en `users`.
+2. Si desea vender, crea un `seller_profile` y lo vincula con categorías relevantes a través de `seller_categories`.
+3. Envía mensajes (messages). Algunos mensajes se promueven a listados (`marketplace_items`) y se etiquetan con una categoría opcional (`marketplace_categories`).
+4. Los miembros del chat consultan el listado, negocian dentro del mismo hilo (estatus + `current_price`) y gestionan el ciclo de vida del item (active → sold o cancelled).
 
 

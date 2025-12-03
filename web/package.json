@@ -10,6 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@amplitude/analytics-browser": "^2.31.3",
     "axios": "^1.6.7",
     "framer-motion": "^11.0.0",
     "lucide-react": "^0.453.0",

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
+import { clearAnalyticsUser, setAnalyticsUser, trackEvent } from '../lib/analytics'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const USER_STORAGE_KEY = 'current_user'
@@ -90,6 +91,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetchUserProfile(token)
   }, [token])
 
+  useEffect(() => {
+    if (user) {
+      void setAnalyticsUser({
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        fullName: user.full_name,
+      })
+    } else {
+      void clearAnalyticsUser()
+    }
+  }, [user])
+
   async function fetchUserProfile(accessToken: string) {
     const id = decodeUserId(accessToken)
     if (!id) return
@@ -112,14 +126,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password: string) => {
     const { data } = await axios.post(`${API_URL}/auth/login`, { username, password })
     setToken(data.access_token)
+    void trackEvent('login_success', { method: 'credentials' })
   }
 
   const register = async (p: { username: string, email: string, full_name: string, password: string }) => {
     await axios.post(`${API_URL}/auth/register`, p)
+    void trackEvent('register_success', { method: 'credentials' })
     await login(p.username, p.password)
   }
 
   const logout = () => {
+    void trackEvent('logout')
+    void clearAnalyticsUser()
     setToken(null)
     setUser(undefined)
   }

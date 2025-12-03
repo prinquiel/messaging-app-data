@@ -7,11 +7,22 @@ on:
   workflow_dispatch:
 
 env:
+  # Configuración de Terraform para automatización
   TF_IN_AUTOMATION: "true"
   TF_CLI_ARGS_plan: "-input=false"
   TF_CLI_ARGS_apply: "-input=false"
-  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-  TF_VAR_ssh_key_ids: ${{ secrets.TF_VAR_SSH_KEY_IDS }}
+  
+  # --- Variables del archivo terraform.tfvars.example ---
+  
+  # 1. do_token (Obligatorio)
+  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+  
+  # 2. ssh_key_ids (Obligatorio)
+  # IMPORTANTE: Se procesa en el paso "Check and Load Secrets" para manejar el formato (string vs lista)
+  # basándose en el secret TF_VAR_SSH_FINGERPRINT
+
+  # 3. Variables opcionales (region, service_overrides)
+  # Se cargan dinámicamente.
 
 jobs:
   terraform:
@@ -23,30 +34,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ensure Terraform secrets exist
+      - name: Check and Load Secrets
         run: |
+          # Verificación de variables obligatorias
           if [ -z "$TF_VAR_do_token" ]; then
-            echo "::error::Falta el secreto DIGITALOCEAN_ACCESS_TOKEN / TF_VAR_do_token."
+            echo "::error::Falta el secreto DIGITALOCEAN_TOKEN."
             exit 1
           fi
 
-          if [ -z "$TF_VAR_ssh_key_ids" ]; then
-            echo "::error::Define TF_VAR_SSH_KEY_IDS como JSON (ej. [\"123456\"])."
+          # Manejo inteligente del fingerprint SSH
+          SSH_FINGERPRINT="${{ secrets.TF_VAR_SSH_FINGERPRINT }}"
+          
+          if [ -z "$SSH_FINGERPRINT" ]; then
+            echo "::error::Falta el secreto TF_VAR_SSH_FINGERPRINT."
             exit 1
           fi
 
-      - name: Export optional Terraform vars
-        run: |
+          # Si el valor NO empieza con '[', asumimos que es un solo fingerprint y lo convertimos a lista JSON
+          if [[ "$SSH_FINGERPRINT" != \[* ]]; then
+            echo "Detectado fingerprint individual. Formateando como lista..."
+            echo "TF_VAR_ssh_key_ids=[\"$SSH_FINGERPRINT\"]" >> "$GITHUB_ENV"
+          else
+            # Si ya tiene corchetes, lo pasamos tal cual
+            echo "TF_VAR_ssh_key_ids=$SSH_FINGERPRINT" >> "$GITHUB_ENV"
+          fi
+
+          # Carga condicional de variables opcionales
           if [ -n "${{ secrets.TF_VAR_REGION }}" ]; then
             echo "TF_VAR_region=${{ secrets.TF_VAR_REGION }}" >> "$GITHUB_ENV"
+          fi
+          
+          if [ -n "${{ secrets.TF_VAR_SERVICE_OVERRIDES }}" ]; then
+            echo "TF_VAR_service_overrides=${{ secrets.TF_VAR_SERVICE_OVERRIDES }}" >> "$GITHUB_ENV"
           fi
 
           if [ -n "${{ secrets.TF_VAR_DEFAULT_SIZE }}" ]; then
             echo "TF_VAR_default_size=${{ secrets.TF_VAR_DEFAULT_SIZE }}" >> "$GITHUB_ENV"
-          fi
-
-          if [ -n "${{ secrets.TF_VAR_SERVICE_OVERRIDES }}" ]; then
-            echo "TF_VAR_service_overrides=${{ secrets.TF_VAR_SERVICE_OVERRIDES }}" >> "$GITHUB_ENV"
           fi
 
       - name: Setup Terraform
@@ -67,5 +90,5 @@ jobs:
         run: terraform plan -out=tfplan
 
       - name: Terraform apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve tfplan
-

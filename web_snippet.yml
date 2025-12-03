@@ -1,0 +1,15 @@
+    container_name: metabase
+    ports:
+      - "3000:3000"
+    environment:
+      - MB_SITE_URL=http://localhost:3000
+    depends_on:
+      analyticsdb:
+        condition: service_healthy
+
+volumes:
+  chatdb_data:
+  analyticsdb_data:
+  temporal_pg_data:
+cat
+EOF

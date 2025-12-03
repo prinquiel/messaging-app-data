@@ -30,7 +30,7 @@ locals {
       name        = "msg-analytics-prod"
       environment = "prod"
       region      = null
-      size        = "s-8vcpu-16gb"
+      size        = "s-4vcpu-8gb"
       image       = null
       backups     = true
       ipv6        = true
